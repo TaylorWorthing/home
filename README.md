@@ -1,5 +1,5 @@
 # Home
-**A simple, opinionated, personal package manager for your home directory**
+`home` is a simple, opinionated, personal package manager for your home directory.
 
 Packages typically contain things like config files (dotfiles), binaries/scripts, and shell aliases/functions/completions.
 A package is simply a GitHub repository with a specific directory structure and maybe some scripts to help build or handle special install cases.
@@ -77,7 +77,7 @@ Update one or more packages.
 
 If no package list is provided, all cached packages will be updated.
 
-`ls`  
+`home ls`  
 List all packages that are cached.
 
 
