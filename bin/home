@@ -1,0 +1,169 @@
+#!/usr/bin/env bash
+
+# XDG Base Directory Specification
+: "${XDG_BIN_HOME:=${HOME}/.local/bin}"
+: "${XDG_DATA_HOME:=${HOME}/.local/share}"
+: "${XDG_CONFIG_HOME:=${HOME}/.config}"
+: "${XDG_CACHE_HOME:=${HOME}/.cache}"
+
+# Default GitHub username to use for packages specified witout a username.
+USERNAME="${GITHUB_USERNAME:-BrowncoatShadow}"
+# Git protocol used for cloning package repos. Can take SSH or HTTPS.
+PROTOCOL="${HOME_PROTOCOL:-SSH}"
+# Where package repos are cached.
+CACHE_DIR="${XDG_CACHE_HOME}/home/packages"
+# Where binaries are copied.
+# Should be somewhere in your PATH.
+BIN_DIR="${XDG_BIN_HOME}"
+# Where bash files to be sourced are copied.
+# Files in this directory should be sourced in something like your ~/.bashrc file.
+BASH_DIR="${XDG_CONFIG_HOME}/bash/bashrc.d"
+# Where bash completions are copied.
+# This is the default behavior for bash-completion and completions in this
+# directory are loaded on demand. Completions must match the command name in
+# the format of "${cmd}", "${cmd}.bash", or "_${cmd}".
+COMP_DIR="${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME}/bash-completion}/completions"
+
+read -r -d '' USAGE <<EOF
+A simple, opinionated, personal package manager for your home directory
+
+Usage:
+  home (add | rm) <package>...
+  home up [package>...]
+  home ls
+EOF
+
+# Copy or remove files based on contents of a package directory
+#   {1} Hook name
+#   {2} Full path to source directory in package cache
+#   {3} Target directory
+package_directory_hook() {
+  local file
+  if [[ -d "${2}" ]]; then
+    for file in $(find "${2}" -maxdepth 1 -mindepth 1 -type f); do
+      if [[ "${1}" == "install" ]]; then
+        mkdir -p "${3}"
+        cp "${file}" "${3}"
+
+        if [[ "${2##*/}" == "bin" && ! -x "${file}" ]]; then
+          chmod +x "${3}/${file##*/}"
+        fi
+      elif [[ "${1}" == "uninstall" ]]; then
+        if [[ -f "${3}/${file##*/}" ]]; then
+          rm -f "${3}/${file##*/}"
+        fi
+        rmdir -p "${3}" 2>/dev/null
+      fi
+    done
+  fi
+}
+
+# Check for script hook in `scripts` directory and execute it
+# Fallback to implicity directory hooks
+#   {1} Package cache
+#   {2} Hook name
+package_hook() {
+  if [[ -x "${1}/scripts/${2}" ]]; then
+    pushd "${1}" >/dev/null
+    "${1}/scripts/${2}"
+    popd >/dev/null
+  else
+    package_directory_hook "${2}" "${1}/bin" "${BIN_DIR}"
+    package_directory_hook "${2}" "${1}/bash" "${BASH_DIR}"
+    package_directory_hook "${2}" "${1}/completions" "${COMP_DIR}"
+  fi
+}
+
+# Find all cached packages then return them in `Username/Repo` format
+# Any directory tree two levels deep that is a git repo is considered a package cache
+list_packages() {
+  local package
+  for package in $(find "${CACHE_DIR}" -mindepth 2 -maxdepth 2 -type d); do
+    if [[ -d "${package}/.git" ]]; then
+      echo "${package#${CACHE_DIR}/}"
+    fi
+  done
+}
+
+main() {
+  local package_name package_cache package_list
+  local action="${1}"
+  shift
+
+  if [[ ! "${action}" =~ ^(add|rm|up|ls)$ ]]; then
+    echo "${USAGE}"
+    exit 0
+  fi
+
+  if [[ "${action}" == "ls" ]]; then
+    list_packages
+    exit 0
+  fi
+
+  # If action is `up` without packages, update all cached packages
+  if [[ "${action}" == "up" && -z "${1}" ]]; then
+    package_list=($(list_packages))
+  fi
+
+  if [[ -z "${package_list}" && -z "${1}" ]]; then
+    echo "${action} requires a list of one or more package names"
+    exit 1
+  fi
+
+  for package_name in "${package_list[@]:-${@}}"; do
+
+    # Parse the the package_name string into "namespace/repo" with default USERNAME
+    package_name=(${package_name/\// })
+    if [[ ${#package_name[@]} -eq 1 ]]; then
+      package_name="${USERNAME}/${package_name[0]}"
+    elif [[ ${#package_name[@]} -eq 2 ]]; then
+      package_name="${package_name[0]}/${package_name[1]}"
+    else
+      echo "Unparseable package name: ${package_name[@]}"
+      continue
+    fi
+
+    package_cache="${CACHE_DIR}/${package_name}"
+
+    echo "${package_name}" 
+
+    if [[ "${action}" =~ ^(rm|up)$ ]]; then
+      package_hook "${package_cache}" "uninstall"
+    fi
+
+    if [[ "${action}" == "up" ]]; then
+      if [[ -d "${package_cache}" ]]; then
+        pushd "${package_cache}" >/dev/null
+        git pull
+        popd >/dev/null
+      else
+        echo "${package_name} is not an installed package"
+        continue
+      fi
+    fi
+
+    if [[ "${action}" == "add" && ! -d "${package_cache}" ]]; then
+      if [[ "${PROTOCOL}" =~ ^(https|HTTPS)$ ]]; then
+        package_uri="https://github.com/${package_name}.git"
+      elif [[ "${PROTOCOL}" =~ ^(ssh|SSH)$ ]]; then
+        package_uri="git@github.com:${package_name}.git"
+      else
+        echo "[fatal] bad protocol: ${PROTOCOL}"
+        exit 1
+      fi
+
+      git clone "${package_uri}" "${package_cache}"
+    fi
+
+    if [[ "${action}" =~ ^(add|up)$ ]]; then
+      package_hook "${package_cache}" "build"
+      package_hook "${package_cache}" "install"
+    fi
+
+    if [[ "${action}" == "rm" ]]; then
+      rm -rf "${package_cache}"
+      rmdir -p "${package_cache%/*}" 2>/dev/null
+    fi
+  done
+}
+main "${@}"
