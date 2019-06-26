@@ -62,8 +62,8 @@ If your system does not automatically load bash-completion, you will need to set
 ## Usage
 ```
 home (add | rm) <package>...
-home up [package]...
-home ls
+home up [<package>]...
+home ls [all] [mine]
 ```
 
 `home add <package>...`  
@@ -74,13 +74,20 @@ Uninstall one or more packages.
 
 This action will also remove the package cache.
 
-`home up [package]...`  
+`home up [<package>]...`  
 Update one or more packages.
 
 If no package list is provided, all cached packages will be updated.
 
-`home ls`  
+If `hub` and `jq` are installed, a list of all packages with the topic `home-package` on GitHub will be cached.
+
+`home ls [all] [mine]`  
 List all packages that are cached.
+
+The option `all` will list all known package names.
+
+The option `mine` will list only the user's personal packages, in short name form.
+`mine` can follow the option `all` to list user's all known personal packages, in short name form.
 
 
 ## Packages
