@@ -4,20 +4,21 @@ _home() {
 
   if [[ "${#COMP_WORDS[@]}" -eq 2 ]]; then
     COMPREPLY=($(compgen -W "${actions}" "${COMP_WORDS[${COMP_CWORD}]}"))
-    return
-  fi
   
-  if [[ "${COMP_WORDS[1]}" == "add"  ]]; then
-    if [[ -f "${packages_list}" ]]; then
-      COMPREPLY=($(compgen -W "$(<"${packages_list}")" "${COMP_WORDS[${COMP_CWORD}]}"))
-    fi
+  elif [[ "${COMP_WORDS[1]}" == "add"  ]]; then
+    COMPREPLY=($(compgen -W "$(bin/home ls all)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY+=($(compgen -W "$(bin/home ls all mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
 
   elif [[ "${COMP_WORDS[1]}" =~ ^(rm|up)$ ]]; then
-    COMPREPLY=($(compgen -W "$(home ls)" "${COMP_WORDS[${COMP_CWORD}]}"))
-    COMPREPLY+=($(compgen -W "$(home ls mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY=($(compgen -W "$(bin/home ls)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY+=($(compgen -W "$(bin/home ls mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
 
   elif [[ "${COMP_WORDS[1]}" == "ls" ]]; then
-    COMPREPLY="mine"
+    if [[ "${#COMP_WORDS[@]}" -eq 3 ]]; then
+      COMPREPLY=("all" "mine")
+    elif [[ "${#COMP_WORDS[@]}" -eq 4 && "${COMP_WORDS[2]}" == "all" ]]; then
+      COMPREPLY=("mine")
+    fi
   fi
 }
 complete -F _home home

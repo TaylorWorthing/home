@@ -10,8 +10,12 @@
 USERNAME="${GITHUB_USERNAME:-BrowncoatShadow}"
 # Git protocol used for cloning package repos. Can take SSH or HTTPS.
 PROTOCOL="${HOME_PROTOCOL:-SSH}"
-# Where package repos are cached.
+# Base directory for all caches.
 CACHE_DIR="${XDG_CACHE_HOME}/home"
+# Where packages are cached.
+PACKAGE_CACHE_DIR="${CACHE_DIR}/packages"
+# Where all available package names are cached.
+PACKAGE_LIST_FILE="${CACHE_DIR}/packages.list"
 # Where binaries are copied.
 # Should be somewhere in your PATH.
 BIN_DIR="${XDG_BIN_HOME}"
@@ -30,7 +34,7 @@ A simple, opinionated, personal package manager for your home directory
 Usage:
   home (add | rm) <package>...
   home up [<package>...]
-  home ls [mine]
+  home ls [all] [mine]
 EOF
 
 # Copy or remove files based on contents of a package directory
@@ -76,20 +80,35 @@ package_hook() {
 
 # Find all cached packages then return them in `Username/Repo` format
 # Any directory tree two levels deep that is a git repo is considered a package cache
-#   {1} User-specific package listing
+#   [all] List all known packages
+#   [mine] List only user's personal packages in short form
 list_packages() {
-  local package
-  for package in $(find "${CACHE_DIR}/packages" -mindepth 2 -maxdepth 2 -type d); do
-    if [[ -d "${package}/.git" ]]; then
-      # Option to print user's own packages in short form
-      if [[ "${1}" == "mine" ]]; then
-        package="${package#${CACHE_DIR}/packages/}"
-        if [[ "${package%/*}" == "${USERNAME}" ]]; then
-          echo "${package#*/}"
-        fi
-      else
-        echo "${package#${CACHE_DIR}/packages/}"
+  local package package_list
+
+  if [[ "${1}" == "all" ]]; then
+    if [[ -f "${PACKAGE_LIST_FILE}" ]]; then
+      package_list=($(<"${PACKAGE_LIST_FILE}"))
+      shift
+    else
+      echo "No package list available, make sure 'hub' and 'jq' are installed then run 'home up'"
+      exit 1
+    fi
+  else
+    package_list=()
+    for package in $(find "${PACKAGE_CACHE_DIR}" -mindepth 2 -maxdepth 2 -type d); do
+      if [[ -d "${package}/.git" ]]; then
+        package_list+=("${package#${PACKAGE_CACHE_DIR}/}")
       fi
+    done
+  fi
+
+  for package in "${package_list[@]}"; do
+    if [[ "${1}" == "mine" ]]; then
+      if [[ "${package%/*}" == "${USERNAME}" ]]; then
+        echo "${package#*/}"
+      fi
+    else
+      echo "${package}"
     fi
   done
 }
@@ -111,16 +130,7 @@ main() {
 
   # If hub and jq are installed, update list of packages available from GitHub
   if [[ "${action}" == "up" ]] && type -p hub &>/dev/null && type -p jq &>/dev/null; then
-    package_list="$(hub api "search/repositories?q=topic:home-package" | jq -r ".items[].full_name")"
-
-    echo "${package_list}" > "${CACHE_DIR}/packages.list"
-
-    # Include un-namespaced version of package names for user's personal packages
-    for package_name in ${package_list}; do
-      if [[ "${package_name}" =~ ^${USERNAME} ]]; then
-        echo "${package_name#${USERNAME}/}" >> "${CACHE_DIR}/packages.list"
-      fi
-    done
+    echo "$(hub api "search/repositories?q=topic:home-package" | jq -r ".items[].full_name")" > "${PACKAGE_LIST_FILE}"
   fi
 
   # If action is `up` without packages, update all cached packages
@@ -146,7 +156,7 @@ main() {
       continue
     fi
 
-    package_cache="${CACHE_DIR}/packages/${package_name}"
+    package_cache="${PACKAGE_CACHE_DIR}/${package_name}"
 
     echo "${package_name}" 
 
