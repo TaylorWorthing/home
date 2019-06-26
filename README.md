@@ -15,7 +15,9 @@ In fact, `home` itself is a package! It can (and should) install and update itse
 - Bash
 - Git
 - findutils (specifically `find`)
-- cURL (optional for installation)
+
+Also, if you have `hub` and `jq` installed, `home` will maintain a list of packages labeled with the topic `home-package` on GitHub.
+These names will be used for bash-completion with the `add` action.
 
 
 ## Installation
