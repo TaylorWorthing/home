@@ -6,12 +6,12 @@ _home() {
     COMPREPLY=($(compgen -W "${actions}" "${COMP_WORDS[${COMP_CWORD}]}"))
   
   elif [[ "${COMP_WORDS[1]}" == "add"  ]]; then
-    COMPREPLY=($(compgen -W "$(bin/home ls all)" "${COMP_WORDS[${COMP_CWORD}]}"))
-    COMPREPLY+=($(compgen -W "$(bin/home ls all mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY=($(compgen -W "$(home ls all)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY+=($(compgen -W "$(home ls all mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
 
   elif [[ "${COMP_WORDS[1]}" =~ ^(rm|up)$ ]]; then
-    COMPREPLY=($(compgen -W "$(bin/home ls)" "${COMP_WORDS[${COMP_CWORD}]}"))
-    COMPREPLY+=($(compgen -W "$(bin/home ls mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY=($(compgen -W "$(home ls)" "${COMP_WORDS[${COMP_CWORD}]}"))
+    COMPREPLY+=($(compgen -W "$(home ls mine)" "${COMP_WORDS[${COMP_CWORD}]}"))
 
   elif [[ "${COMP_WORDS[1]}" == "ls" ]]; then
     if [[ "${#COMP_WORDS[@]}" -eq 3 ]]; then
