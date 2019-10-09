@@ -149,7 +149,6 @@ main() {
   fi
 
   for package_name in "${package_list[@]:-${@}}"; do
-
     # Parse the the package_name string into "namespace/repo" with default USERNAME
     package_name=(${package_name/\// })
     if [[ ${#package_name[@]} -eq 1 ]]; then
@@ -163,44 +162,47 @@ main() {
 
     package_cache="${PACKAGE_CACHE_DIR}/${package_name}"
 
-    echo "${package_name}" 
+    echo "${package_name}"
 
-    if [[ "${action}" =~ ^(rm|up)$ ]]; then
+    if [[ "${action}" == "rm" ]]; then
+			# Trigger remove hook, then remove package cache
       package_hook "${package_cache}" "uninstall"
-    fi
+      rm -rf "${package_cache}"
+      rmdir -p "${package_cache%/*}" 2>/dev/null
 
-    if [[ "${action}" == "up" ]]; then
+    elif [[ "${action}" == "up" ]]; then
       if [[ -d "${package_cache}" ]]; then
+				# Only trigger hooks to update if upstream contains changes
         pushd "${package_cache}" >/dev/null
-        git pull
+        git fetch --quiet
+        if ! git diff --quiet @ @{u}; then
+          package_hook "${package_cache}" "uninstall"
+          git pull
+          package_hook "${package_cache}" "build"
+          package_hook "${package_cache}" "install"
+        fi
         popd >/dev/null
       else
         echo "${package_name} is not an installed package"
-        continue
       fi
-    fi
 
-    if [[ "${action}" == "add" && ! -d "${package_cache}" ]]; then
-      if [[ "${PROTOCOL}" =~ ^(https|HTTPS)$ ]]; then
-        package_uri="https://github.com/${package_name}.git"
-      elif [[ "${PROTOCOL}" =~ ^(ssh|SSH)$ ]]; then
-        package_uri="git@github.com:${package_name}.git"
+    elif [[ "${action}" == "add" ]]; then
+      if [[ ! -d "${package_cache}" ]]; then
+        if [[ "${PROTOCOL}" =~ ^(https|HTTPS)$ ]]; then
+          package_uri="https://github.com/${package_name}.git"
+        elif [[ "${PROTOCOL}" =~ ^(ssh|SSH)$ ]]; then
+          package_uri="git@github.com:${package_name}.git"
+        else
+          echo "[fatal] bad protocol: ${PROTOCOL}"
+          exit 1
+        fi
+
+        git clone "${package_uri}" "${package_cache}"
+        package_hook "${package_cache}" "build"
+        package_hook "${package_cache}" "install"
       else
-        echo "[fatal] bad protocol: ${PROTOCOL}"
-        exit 1
+        echo "${package_name} is already installed"
       fi
-
-      git clone "${package_uri}" "${package_cache}"
-    fi
-
-    if [[ "${action}" =~ ^(add|up)$ ]]; then
-      package_hook "${package_cache}" "build"
-      package_hook "${package_cache}" "install"
-    fi
-
-    if [[ "${action}" == "rm" ]]; then
-      rm -rf "${package_cache}"
-      rmdir -p "${package_cache%/*}" 2>/dev/null
     fi
   done
 }
