@@ -63,19 +63,24 @@ package_directory_hook() {
 }
 
 # Check for script hook in `scripts` directory and execute it
-# Fallback to implicity directory hooks
 #   {1} Package cache
 #   {2} Hook name
-package_hook() {
+package_script_hook() {
   if [[ -x "${1}/scripts/${2}" ]]; then
     pushd "${1}" >/dev/null
     "${1}/scripts/${2}"
     popd >/dev/null
-  else
-    package_directory_hook "${2}" "${1}/bin" "${BIN_DIR}"
-    package_directory_hook "${2}" "${1}/bash" "${BASH_DIR}"
-    package_directory_hook "${2}" "${1}/completions" "${COMP_DIR}"
   fi
+}
+
+# Dispatcher for all package hooks
+#   {1} Pacakge cache
+#   {2} Hook name
+package_hook() {
+  package_script_hook "${1}" "${2}"
+  package_directory_hook "${2}" "${1}/bin" "${BIN_DIR}"
+  package_directory_hook "${2}" "${1}/bash" "${BASH_DIR}"
+  package_directory_hook "${2}" "${1}/completions" "${COMP_DIR}"
 }
 
 # Find all cached packages then return them in `Username/Repo` format
