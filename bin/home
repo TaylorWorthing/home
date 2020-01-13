@@ -37,28 +37,96 @@ Usage:
   home ls [all] [mine]
 EOF
 
-# Copy or remove files based on contents of a package directory
-#   {1} Hook name
-#   {2} Full path to source directory in package cache
-#   {3} Target directory
-package_directory_hook() {
-  local file
-  if [[ -d "${2}" ]]; then
-    for file in $(find "${2}" -maxdepth 1 -mindepth 1 -type f); do
-      if [[ "${1}" == "install" ]]; then
-        mkdir -p "${3}"
-        cp "${file}" "${3}"
+# Recursively copy each file from every directory in source directory to target directory
+#   {1} Source directory
+#   {2} Target directory
+recursive_copy() {
+  local source_dir="${1}"
+  local target_dir="${2}"
+  local source_file target_file source_step_dir target_step_dir
 
-        if [[ "${2##*/}" == "bin" && ! -x "${file}" ]]; then
-          chmod +x "${3}/${file##*/}"
-        fi
-      elif [[ "${1}" == "uninstall" ]]; then
-        if [[ -f "${3}/${file##*/}" ]]; then
-          rm -f "${3}/${file##*/}"
-        fi
-        rmdir -p "${3}" 2>/dev/null
+  if [[ -d "${source_dir}" ]]; then
+    for source_file in $(find "${source_dir}" -maxdepth 1 -mindepth 1 -type f); do
+      target_file="${target_dir}/${source_file##*/}"
+      mkdir -p "${target_dir}"
+      cp "${source_file}" "${target_dir}"
+    done
+
+    for source_step_dir in $(find "${source_dir}" -maxdepth 1 -mindepth 1 -type d); do
+      target_step_dir="${target_dir}/${source_step_dir##*/}"
+      recursive_copy "${source_step_dir}" "${target_step_dir}"
+    done
+  fi
+}
+
+# Recursively delete each file from every directory in source directory from target directory
+#   {1} Source directory
+#   {2} Target directory
+recursive_delete() {
+  local source_dir="${1}"
+  local target_dir="${2}"
+  local source_file target_file source_step_dir target_step_dir
+
+  if [[ -d "${source_dir}" ]]; then
+    for source_file in $(find "${source_dir}" -maxdepth 1 -mindepth 1 -type f); do
+      target_file="${target_dir}/${source_file##*/}"
+      if [[ -f "${target_file}" ]]; then
+        rm -f "${target_file}"
       fi
     done
+
+    for source_step_dir in $(find "${source_dir}" -maxdepth 1 -mindepth 1 -type d); do
+      target_step_dir="${target_dir}/${source_step_dir##*/}"
+      recursive_delete "${source_step_dir}" "${target_step_dir}"
+    done
+
+    rmdir -p "${target_dir}" 2>/dev/null
+  fi
+}
+
+# Ensure executible bit is set for every file in the target directory that is listed in the source directory
+#   {1} Source directory
+#   {2} Target directory
+ensure_executables() {
+  local source_dir="${1}"
+  local target_dir="${2}"
+  local source_file target_file
+
+  if [[ -d "${source_dir}" ]]; then
+    for source_file in $(find "${source_dir}" -maxdepth 1 -mindepth 1 -type f); do
+      target_file="${target_dir}/${source_file##*/}"
+      if [[ ! -x "${source_file}" ]]; then
+        chmod +x "${target_file}"
+      fi
+    done
+  fi
+}
+
+# Copy or remove files based on contents of a package directory
+#   {1} Package cache
+#   {2} Hook name
+#   {3} Source directory in pacakge cache
+#   {4} Target directory
+#   {5} Hook options
+# Hook Options
+#   h   Files should be marked as hidden with a leading "."
+#   x   Files should be marked as executable
+package_directory_hook() {
+  local hook="${2}"
+  local source_dir="${1}/${3}"
+  local target_dir="${4}"
+  local source_file target_file
+
+  if [[ -d "${source_dir}" ]]; then
+      if [[ "${hook}" == "install" ]]; then
+        recursive_copy "${source_dir}" "${target_dir}" "."
+
+        if [[ "${3}" == "bin" ]]; then
+          ensure_executables "${source_dir}" "${target_dir}"
+        fi
+      elif [[ "${1}" == "uninstall" ]]; then
+        recursive_delete "${source_dir}" "${target_dir}"
+      fi
   fi
 }
 
@@ -78,9 +146,9 @@ package_script_hook() {
 #   {2} Hook name
 package_hook() {
   package_script_hook "${1}" "${2}"
-  package_directory_hook "${2}" "${1}/bin" "${BIN_DIR}"
-  package_directory_hook "${2}" "${1}/bash" "${BASH_DIR}"
-  package_directory_hook "${2}" "${1}/completions" "${COMP_DIR}"
+  package_directory_hook "${1}" "${2}" "bin" "${BIN_DIR}" "x"
+  package_directory_hook "${1}" "${2}" "bash" "${BASH_DIR}"
+  package_directory_hook "${1}" "${2}" "completions" "${COMP_DIR}"
 }
 
 # Find all cached packages then return them in `Username/Repo` format
